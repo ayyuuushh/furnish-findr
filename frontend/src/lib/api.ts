@@ -1,8 +1,5 @@
-// Hard-code the backend base to avoid env drift during submission.
-// You can switch back to env later if you like.
 export const API_BASE = "https://furnish-findr-backend.onrender.com";
 
-// Small helper so requests don't hang forever.
 async function withTimeout<T>(p: Promise<T>, ms = 30000): Promise<T> {
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), ms);
@@ -14,9 +11,6 @@ async function withTimeout<T>(p: Promise<T>, ms = 30000): Promise<T> {
     clearTimeout(t);
   }
 }
-
-// DEBUG: log so you can see in DevTools exactly what base is used at runtime.
-console.log("API_BASE =", API_BASE);
 
 export async function recommend(body: { query: string; k?: number; filters?: any }) {
   const res = await withTimeout(
@@ -43,3 +37,5 @@ export async function analytics() {
   }
   return await res.json();
 }
+
+console.log("✅ API_BASE =", API_BASE);
