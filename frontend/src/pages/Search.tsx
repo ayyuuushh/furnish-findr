@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { recommend } from "../lib/api";
+import { recommend, API_BASE } from "../lib/api";
 
 type Item = {
   uniq_id: string;
@@ -12,12 +12,64 @@ type Item = {
   score?: number;
 };
 
-function imageProxy(url?: string | null) {
-  if (!url) return undefined;
-  const clean = url.replace(/^https?:\/\//, "");
-  return `https://images.weserv.nl/?url=${encodeURIComponent(clean)}`;
+/* ---------- image helpers: no weserv, use direct URL then backend proxy ---------- */
+function normalizeUrl(raw?: string | null): string | undefined {
+  if (!raw) return;
+  let s = String(raw).trim();
+  if (!s) return;
+
+  // handle protocol-relative URLs like //m.media-amazon.com/...
+  if (s.startsWith("//")) return "https:" + s;
+
+  // already http(s)
+  if (/^https?:\/\//i.test(s)) return s;
+
+  // if the field had extra text but contains a real URL, extract it
+  const m = s.match(/https?:\/\/[^\s"']+/i);
+  if (m) return m[0];
+
+  return; // give up
 }
 
+function ImgWithFallback({ srcDirect, alt }: { srcDirect?: string | null; alt: string }) {
+  const direct = normalizeUrl(srcDirect);
+  const proxy = direct ? `${API_BASE}/api/img?u=${encodeURIComponent(direct)}` : undefined;
+
+  const [src, setSrc] = React.useState<string | undefined>(direct);
+  const usedFallback = React.useRef(false);
+
+  React.useEffect(() => {
+    usedFallback.current = false;
+    setSrc(direct);
+  }, [direct]);
+
+  const onError = () => {
+    if (!usedFallback.current && proxy) {
+      usedFallback.current = true;
+      setSrc(proxy);
+    }
+  };
+
+  return (
+    <img
+      src={src || "https://placehold.co/240x240?text=No+Image"}
+      alt={alt}
+      loading="lazy"
+      referrerPolicy="no-referrer"
+      crossOrigin="anonymous"
+      onError={onError}
+      style={{
+        width: 120,
+        height: 120,
+        borderRadius: 8,
+        objectFit: "cover",
+        background: "#1e293b",
+      }}
+    />
+  );
+}
+
+/* ------------------------------- main page ------------------------------- */
 export default function Search() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Item[]>([]);
@@ -39,7 +91,7 @@ export default function Search() {
       }
       setResults(items);
     } catch (e: any) {
-      setError(`Server ${e.message?.includes("404") ? "404" : ""}: ${e.message || "Error"}`);
+      setError(`Server ${e?.message?.includes("404") ? "404" : ""}: ${e?.message || "Error"}`);
     } finally {
       setLoading(false);
     }
@@ -120,7 +172,6 @@ export default function Search() {
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {results.map((r) => {
-          const img = imageProxy(r.image);
           const price =
             typeof r.price === "number" && !Number.isNaN(r.price)
               ? `₹${Math.round(r.price)}`
@@ -140,37 +191,7 @@ export default function Search() {
                 boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
               }}
             >
-              {img ? (
-                <img
-                  src={img}
-                  alt={r.title}
-                  style={{
-                    width: 120,
-                    height: 120,
-                    borderRadius: 8,
-                    objectFit: "cover",
-                    background: "#1e293b",
-                  }}
-                  onError={(e) =>
-                    ((e.currentTarget as HTMLImageElement).style.display = "none")
-                  }
-                />
-              ) : (
-                <div
-                  style={{
-                    width: 120,
-                    height: 120,
-                    borderRadius: 8,
-                    background: "#1e293b",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#94a3b8",
-                  }}
-                >
-                  No Image
-                </div>
-              )}
+              <ImgWithFallback srcDirect={r.image} alt={r.title} />
               <div style={{ flex: 1 }}>
                 <h3 style={{ margin: "0 0 4px 0", fontSize: 17 }}>{r.title}</h3>
                 <p style={{ margin: "0 0 4px 0", color: "#cbd5e1" }}>
