@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { API_BASE } from "../lib/api";
 
 type Item = {
@@ -15,6 +15,7 @@ type Item = {
 function normalizeUrl(raw?: string | null): string | undefined {
   if (!raw) return;
   let s = String(raw).trim();
+  if (!s) return;
   if (s.startsWith("//")) return "https:" + s;
   if (/^https?:\/\//i.test(s)) return s;
   if (/^[a-z0-9.-]+\/.+/i.test(s)) return "https://" + s;
@@ -22,24 +23,43 @@ function normalizeUrl(raw?: string | null): string | undefined {
   return m ? m[0] : undefined;
 }
 
-export default function ProductCard({ item }: { item: Item }) {
-  const direct = normalizeUrl(item.image);
-  const proxied = direct ? `${API_BASE}/api/img?u=${encodeURIComponent(direct)}` : undefined;
+function fmtPrice(price?: number | null, price_text?: string | null) {
+  if (typeof price === "number" && !Number.isNaN(price)) {
+    return `₹${Math.round(price)}`;
+  }
+  return price_text || "₹NA";
+}
 
-  const price =
-    typeof item.price === "number" && !Number.isNaN(item.price)
-      ? `₹${Math.round(item.price)}`
-      : item.price_text || "₹NA";
+export default function ProductCard({ item }: { item: Item }) {
+  const [stage, setStage] = useState<"proxy" | "direct" | "placeholder">("proxy");
+  const direct = useMemo(() => normalizeUrl(item.image), [item.image]);
+  const cacheBust = useMemo(() => `cb=${Date.now()}`, []);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  const proxy = direct
+    ? `${API_BASE}/api/img?u=${encodeURIComponent(direct)}&${cacheBust}`
+    : undefined;
+
+  const src =
+    stage === "proxy" ? proxy :
+    stage === "direct" ? direct :
+    "https://placehold.co/320x240?text=No+Image";
+
+  const price = fmtPrice(item.price, item.price_text);
 
   const handleError: React.ReactEventHandler<HTMLImageElement> = (e) => {
-    const el = e.currentTarget;
-    const current = el.getAttribute("src") || "";
-    // if proxy failed, try direct URL; otherwise show placeholder
-    if (proxied && current.startsWith(`${API_BASE}/api/img`) && direct) {
-      el.src = direct;
+    // Step through: proxy → direct → placeholder
+    if (stage === "proxy" && direct) {
+      setStage("direct");
+    } else if (stage === "direct") {
+      setStage("placeholder");
     } else {
-      el.src = "https://placehold.co/320x240?text=No+Image";
+      // already placeholder: do nothing
     }
+  };
+
+  const handleLoad: React.ReactEventHandler<HTMLImageElement> = () => {
+    // image loaded successfully
   };
 
   return (
@@ -55,9 +75,10 @@ export default function ProductCard({ item }: { item: Item }) {
         boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
       }}
     >
-      {(proxied || direct) ? (
+      <div style={{ flex: "0 0 120px" }}>
         <img
-          src={proxied || direct}
+          ref={imgRef}
+          src={src}
           alt={item.title}
           loading="lazy"
           referrerPolicy="no-referrer"
@@ -68,31 +89,18 @@ export default function ProductCard({ item }: { item: Item }) {
             objectFit: "cover",
             background: "#0b1220",
             border: "1px solid #334155",
-            flex: "0 0 120px",
+            display: "block",
           }}
           onError={handleError}
+          onLoad={handleLoad}
         />
-      ) : (
-        <div
-          style={{
-            width: 120,
-            height: 120,
-            borderRadius: 8,
-            background: "#0b1220",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#94a3b8",
-            border: "1px solid #334155",
-            flex: "0 0 120px",
-            fontSize: 12,
-            textAlign: "center",
-            padding: 8,
-          }}
-        >
-          No Image
+        <div style={{ marginTop: 6, fontSize: 11, color: "#94a3b8" }}>
+          {/* Quick indicator of which source succeeded */}
+          {stage === "proxy" && "loading via proxy…"}
+          {stage === "direct" && "loaded direct"}
+          {stage === "placeholder" && "no image available"}
         </div>
-      )}
+      </div>
 
       <div style={{ flex: 1, color: "#e5e7eb" }}>
         <h3 style={{ margin: "0 0 6px 0", fontSize: 16, color: "#c7d2fe" }}>{item.title}</h3>
