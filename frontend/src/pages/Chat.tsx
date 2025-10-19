@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import ProductCard from "../components/ProductCard";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
+import { recommend } from "../lib/api";
 
 export default function Chat() {
   const [query, setQuery] = useState("");
@@ -14,48 +13,22 @@ export default function Chat() {
     setLoading(true);
     setError(null);
     setItems([]);
-
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 20000); // 20s timeout
-
     try {
-      const res = await fetch(`${API_BASE}/api/recommend`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, k: 8 }),
-        signal: controller.signal,
-      });
-
-      if (!res.ok) {
-        const txt = await res.text();
-        // ✅ Graceful "No results found" handling
-        if (res.status === 404 || res.status === 422 || txt.includes("[]")) {
-          setItems([]);
-          setError("No matching furniture found. Try refining your query.");
-          return;
-        }
-        throw new Error(`HTTP ${res.status}: ${txt}`);
-      }
-
-      const data = await res.json();
-
-      // ✅ Handle empty response properly
-      if (!data?.items?.length) {
+      const out = await recommend({ query, k: 8 });
+      if (!out || out.length === 0) {
         setError("No matching furniture found. Try refining your query.");
         setItems([]);
         return;
       }
-
-      setItems(Array.isArray(data.items) ? data.items : data);
+      setItems(out);
     } catch (err: any) {
       console.error(err);
       setError(
-        err.name === "AbortError"
-          ? "⏱️ Request timed out. Try again."
+        err?.name === "AbortError"
+          ? "⏱️ Server just woke up. Please try again."
           : "⚠️ Something went wrong while fetching recommendations."
       );
     } finally {
-      clearTimeout(timer);
       setLoading(false);
     }
   }
