@@ -1,71 +1,64 @@
 import React, { useEffect, useState } from "react";
-import { analytics } from "../lib/api";
 
-type CountTuple = [string, number];
+const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8100";
 
-type AnalyticsResponse = {
+type Analytics = {
   total_products: number;
-  brand_counts: CountTuple[];
-  category_counts: CountTuple[];
-  material_counts?: CountTuple[];
-  price_summary?: { min?: number | null; avg?: number | null; max?: number | null };
+  brand_counts: [string, number][];
+  category_counts?: [string, number][];
+  material_counts?: [string, number][];
 };
 
 export default function Analytics() {
-  const [data, setData] = useState<AnalyticsResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<Analytics | null>(null);
+  const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const a = await analytics();
-        setData(a);
-      } catch (e) {
-        console.error(e);
-        setError("Failed to load analytics");
-      } finally {
-        setLoading(false);
+        const res = await fetch(`${API_BASE}/api/analytics`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        setData(await res.json());
+      } catch (e: any) {
+        setErr(e?.message || "Failed to load analytics.");
       }
     })();
   }, []);
 
-  if (loading) return <div style={{ padding: 16 }}>Loading analytics…</div>;
-  if (error) return <div style={{ padding: 16, color: "#b91c1c" }}>{error}</div>;
-  if (!data) return <div style={{ padding: 16 }}>No data</div>;
-
-  const ps = data.price_summary || {};
-  const fmt = (v?: number | null) => (typeof v === "number" ? `₹${Math.round(v)}` : "N/A");
-
   return (
-    <div style={{ display: "grid", gap: 16, maxWidth: 960, margin: "24px auto", padding: 16 }}>
-      <div>Totals: <b>{data.total_products}</b> products</div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px,1fr))", gap: 16 }}>
-        <Card title="Top Brands" items={data.brand_counts} />
-        <Card title="Top Categories" items={data.category_counts} />
-        {data.material_counts && <Card title="Top Materials" items={data.material_counts} />}
-      </div>
-
-      <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
-        <h4 style={{ marginTop: 0 }}>Price Summary</h4>
-        <div>Min: {fmt(ps.min)} | Avg: {fmt(ps.avg)} | Max: {fmt(ps.max)}</div>
-      </div>
-    </div>
-  );
-}
-
-function Card({ title, items }: { title: string; items: CountTuple[] }) {
-  return (
-    <div style={{ border: "1px solid #eee", borderRadius: 12, padding: 12 }}>
-      <h4 style={{ marginTop: 0 }}>{title}</h4>
-      <ul style={{ margin: 0, paddingLeft: 18 }}>
-        {items?.slice(0, 10).map(([name, count]) => (
-          <li key={name}>
-            {name} — <b>{count}</b>
-          </li>
-        ))}
-      </ul>
+    <div style={{ background: "white", borderRadius: 12, padding: 16, border: "1px solid #e2e8f0" }}>
+      <h2 style={{ marginTop: 0, color: "#0f172a" }}>Dataset Analytics</h2>
+      {err && <div style={{ color: "#b91c1c" }}>{err}</div>}
+      {!err && !data && <div>Loading…</div>}
+      {data && (
+        <>
+          <p><b>Total products:</b> {data.total_products}</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16 }}>
+            <section>
+              <h3 style={{ marginBottom: 6 }}>Top Brands</h3>
+              <ol>
+                {data.brand_counts.slice(0, 10).map(([n, c]) => <li key={n}>{n} — {c}</li>)}
+              </ol>
+            </section>
+            {data.category_counts && (
+              <section>
+                <h3 style={{ marginBottom: 6 }}>Top Categories</h3>
+                <ol>
+                  {data.category_counts.slice(0, 10).map(([n, c]) => <li key={n}>{n} — {c}</li>)}
+                </ol>
+              </section>
+            )}
+            {data.material_counts && (
+              <section>
+                <h3 style={{ marginBottom: 6 }}>Top Materials</h3>
+                <ol>
+                  {data.material_counts.slice(0, 10).map(([n, c]) => <li key={n}>{n} — {c}</li>)}
+                </ol>
+              </section>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
