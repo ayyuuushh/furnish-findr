@@ -1,14 +1,16 @@
+// frontend/src/lib/api.ts
+// Single source of truth for backend URL (copied version).
 export const API_BASE = "https://furnish-findr-backend.onrender.com";
 
 async function withTimeout<T>(p: Promise<T>, ms = 30000): Promise<T> {
   const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), ms);
-  // @ts-ignore
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  // @ts-ignore attach signal
   p.signal = ctrl.signal;
   try {
     return await p;
   } finally {
-    clearTimeout(t);
+    clearTimeout(timer);
   }
 }
 
@@ -38,4 +40,5 @@ export async function analytics() {
   return await res.json();
 }
 
+// Helpful at runtime to confirm what your build is using
 console.log("✅ API_BASE =", API_BASE);
