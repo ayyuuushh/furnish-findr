@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useRef } from "react";
 
 type Item = {
   uniq_id: string;
@@ -6,14 +6,15 @@ type Item = {
   brand?: string;
   category?: string;
   price?: number | null;
-  image?: string | null;  // what the API returns
+  image?: string | null;
   color?: string | null;
   score?: number;
   blurb?: string;
   price_text?: string;
 };
 
-// 1) Find the first real URL inside any string (handles commas, arrays-as-strings, quotes)
+// --- helpers ---------------------------------------------------------------
+
 const URL_RE = /(https?:\/\/[^\s,"'\]]+)/i;
 
 function firstUrl(raw?: string | null): string | undefined {
@@ -23,48 +24,65 @@ function firstUrl(raw?: string | null): string | undefined {
   // case: //m.media-amazon.com/...
   if (s.startsWith("//")) return `https:${s}`;
 
-  // case: looks like JSON-y array or comma-joined list — pick first http(s) URL
+  // pick first http(s) URL if the field is a messy list
   const m = s.match(URL_RE);
   if (m) return m[1];
 
-  // case: a single URL but no http (rare)
-  if (/^[a-z0-9.-]+\/.+/i.test(s)) return `https://${s}`;
-
-  // finally, if it's just one thing without commas, assume it is the URL
+  // already a clean http(s) url
   if (/^https?:\/\//i.test(s)) return s;
+
+  // something like m.media-amazon.com/… (no scheme)
+  if (/^[a-z0-9.-]+\/.+/i.test(s)) return `https://${s}`;
 
   return;
 }
 
-// 2) Always serve images via HTTPS proxy to avoid mixed content & hotlink blocks
-function viaProxy(source?: string): string | undefined {
-  if (!source) return;
-  const u = firstUrl(source);
+/** Proxy through images.weserv.nl to avoid mixed content/hotlink issues. */
+function viaProxy(src?: string): string | undefined {
+  if (!src) return;
+  const u = firstUrl(src);
   if (!u) return;
 
-  // Remove protocol for weserv
   const clean = u.replace(/^https?:\/\//i, "");
-  // Use wsrv.nl (aka images.weserv.nl). Add transforms for speed and a “404 = empty” default.
-  return `https://wsrv.nl/?url=${encodeURIComponent(clean)}&w=320&h=240&fit=cover&output=webp&default=404`;
+  // keep it simple; some transforms can trigger 404s on edge cases
+  return `https://images.weserv.nl/?url=${encodeURIComponent(clean)}`;
 }
 
 let __logCount = 0;
 
+// --- component -------------------------------------------------------------
+
 export default function ProductCard({ item }: { item: Item }) {
   const raw = item.image || null;
+  const direct = firstUrl(raw);
   const proxied = viaProxy(raw);
 
-  // Log the first few items so you can see exactly what’s happening
+  // log a few cards to verify what we got
   if (__logCount < 5) {
-    // eslint-disable-next-line no-console
-    console.log("[Image debug]", {
+    console.log("[img-debug]", {
       title: item.title,
       raw,
-      extracted: firstUrl(raw || undefined),
+      direct,
       proxied,
     });
     __logCount++;
   }
+
+  const imgRef = useRef<HTMLImageElement | null>(null);
+
+  const handleImgError: React.ReactEventHandler<HTMLImageElement> = (e) => {
+    const el = e.currentTarget;
+    const current = el.getAttribute("src") || "";
+
+    // 1) If proxy failed, try the direct URL
+    if (proxied && current.includes("images.weserv.nl") && direct) {
+      el.src = direct;
+      return;
+    }
+
+    // 2) If direct failed (or we never had one), show a visible placeholder
+    el.src = "https://placehold.co/320x240?text=No+Image";
+  };
 
   const price =
     typeof item.price === "number" && !Number.isNaN(item.price)
@@ -84,25 +102,24 @@ export default function ProductCard({ item }: { item: Item }) {
         boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
       }}
     >
-      {proxied ? (
+      {(proxied || direct) ? (
         <img
-          src={proxied}
+          ref={imgRef}
+          src={proxied || direct}
           alt={item.title}
           loading="lazy"
           referrerPolicy="no-referrer"
+          crossOrigin="anonymous"
           style={{
             width: 120,
             height: 120,
             borderRadius: 8,
             objectFit: "cover",
             background: "#0b1220",
+            border: "1px solid #334155",
             flex: "0 0 120px",
           }}
-          onError={(e) => {
-            // graceful fallback if proxy still fails
-            (e.currentTarget as HTMLImageElement).src =
-              "https://placehold.co/320x240?text=No+Image";
-          }}
+          onError={handleImgError}
         />
       ) : (
         <div
@@ -115,6 +132,7 @@ export default function ProductCard({ item }: { item: Item }) {
             alignItems: "center",
             justifyContent: "center",
             color: "#94a3b8",
+            border: "1px solid #334155",
             flex: "0 0 120px",
             fontSize: 12,
             textAlign: "center",
@@ -135,10 +153,10 @@ export default function ProductCard({ item }: { item: Item }) {
         <p style={{ margin: 0, color: "#eab308" }}>
           Price: <b>{price}</b>
         </p>
-        {raw && (
+        {direct && (
           <div style={{ marginTop: 6 }}>
             <a
-              href={firstUrl(raw)}
+              href={direct}
               target="_blank"
               rel="noreferrer"
               style={{ color: "#60a5fa", fontSize: 12 }}
