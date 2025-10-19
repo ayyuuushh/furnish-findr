@@ -1,6 +1,5 @@
-// frontend/src/pages/Search.tsx
-import React, { useState, useEffect, useRef } from "react";
-import { API_BASE } from "../lib/api";
+import React, { useEffect, useState } from "react";
+import { recommend } from "../lib/api";
 
 type Item = {
   uniq_id: string;
@@ -8,132 +7,96 @@ type Item = {
   brand?: string;
   category?: string;
   price?: number | null;
-  price_text?: string | null;
   image?: string | null;
+  color?: string | null;
+  score?: number;
 };
 
-function normalizeUrl(raw?: string | null): string | undefined {
-  if (!raw) return;
-  let s = String(raw).trim();
-  if (!s) return;
-  if (s.startsWith("//")) return "https:" + s;
-  if (/^https?:\/\//i.test(s)) return s;
-  const m = s.match(/https?:\/\/[^\s"']+/i);
-  if (m) return m[0];
-  return;
-}
-
-function ImgWithFallback({ srcDirect }: { srcDirect?: string }) {
-  const direct = normalizeUrl(srcDirect);
-  const proxy = direct ? `${API_BASE}/api/img?u=${encodeURIComponent(direct)}` : undefined;
-  const [src, setSrc] = useState<string | undefined>(direct);
-  const usedFallback = useRef(false);
-
-  useEffect(() => {
-    usedFallback.current = false;
-    setSrc(direct);
-  }, [direct]);
-
-  const onError = () => {
-    if (!usedFallback.current && proxy) {
-      usedFallback.current = true;
-      setSrc(proxy);
-    }
-  };
-
-  return (
-    <img
-      src={src || "https://placehold.co/240x240?text=No+Image"}
-      alt=""
-      loading="lazy"
-      referrerPolicy="no-referrer"
-      crossOrigin="anonymous"
-      onError={onError}
-      style={{
-        width: 120,
-        height: 120,
-        objectFit: "cover",
-        borderRadius: 8,
-        background: "#1e293b",
-      }}
-    />
-  );
+function imageProxy(url?: string | null) {
+  if (!url) return undefined;
+  const clean = url.replace(/^https?:\/\//, "");
+  return `https://images.weserv.nl/?url=${encodeURIComponent(clean)}`;
 }
 
 export default function Search() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<Item[]>([]);
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  async function hit() {
+  async function handleSearch() {
     if (!query.trim()) return;
     setLoading(true);
-    setErr(null);
+    setError(null);
     setResults([]);
+
     try {
-      const res = await fetch(`${API_BASE}/api/recommend`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, k: 8 }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const json = await res.json();
-      setResults(json.items || []);
-    } catch (e) {
-      setErr("Server error. Try again.");
+      const items = await recommend({ query, k: 8 });
+      if (!items || items.length === 0) {
+        setError("No matching furniture found. Try refining your query.");
+        setResults([]);
+        return;
+      }
+      setResults(items);
+    } catch (e: any) {
+      setError(`Server ${e.message?.includes("404") ? "404" : ""}: ${e.message || "Error"}`);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    const el = document.getElementById("q") as HTMLInputElement | null;
+    const el = document.getElementById("query") as HTMLInputElement | null;
     el?.focus();
   }, []);
 
   return (
-    <div style={{ maxWidth: 960, margin: "0 auto", padding: 16, color: "#e2e8f0" }}>
+    <div
+      style={{
+        maxWidth: 960,
+        margin: "0 auto",
+        padding: 24,
+        fontFamily: "Poppins, sans-serif",
+        color: "#1f2937",
+      }}
+    >
       <header
         style={{
+          textAlign: "center",
+          padding: "18px 0",
+          marginBottom: 30,
           background: "linear-gradient(90deg,#06b6d4,#22d3ee)",
+          color: "white",
           borderRadius: 12,
-          padding: 16,
-          marginBottom: 16,
-          color: "#0b1220",
-          fontWeight: 700,
-          fontSize: 22,
         }}
       >
-        FurnishFindr
+        <h1 style={{ fontSize: 26, margin: 0, fontWeight: 700 }}>FurnishFindr</h1>
       </header>
 
-      <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "flex", gap: 10, marginBottom: 20 }}>
         <input
-          id="q"
+          id="query"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && hit()}
-          placeholder="e.g. oak coffee table under ₹10000"
+          placeholder="e.g. round glass side table under ₹6000"
           style={{
             flex: 1,
             padding: "10px 12px",
+            border: "1px solid #d1d5db",
             borderRadius: 8,
-            border: "1px solid #334155",
-            background: "#0f172a",
-            color: "#e2e8f0",
           }}
+          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
         />
         <button
-          onClick={hit}
+          onClick={handleSearch}
           disabled={loading}
           style={{
             padding: "10px 16px",
-            borderRadius: 8,
             border: "none",
-            background: "#06b6d4",
-            color: "#0b1220",
-            fontWeight: 700,
+            borderRadius: 8,
+            background: "#2563eb",
+            color: "white",
+            fontWeight: 600,
             cursor: "pointer",
           }}
         >
@@ -141,40 +104,90 @@ export default function Search() {
         </button>
       </div>
 
-      {err && (
-        <div style={{ background: "#fee2e2", color: "#991b1b", padding: 12, borderRadius: 8, marginBottom: 12 }}>
-          {err}
+      {error && (
+        <div
+          style={{
+            background: "#fee2e2",
+            color: "#991b1b",
+            borderRadius: 8,
+            padding: 10,
+            marginBottom: 20,
+          }}
+        >
+          {error}
         </div>
       )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        {results.map((r) => (
-          <div
-            key={r.uniq_id}
-            style={{
-              display: "flex",
-              gap: 12,
-              padding: 12,
-              borderRadius: 10,
-              background: "#0b1220",
-              border: "1px solid #1f2937",
-            }}
-          >
-            <ImgWithFallback srcDirect={r.image} />
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 700, color: "#93c5fd", marginBottom: 4 }}>{r.title}</div>
-              <div style={{ fontSize: 14, marginBottom: 4 }}>
-                <b>{r.brand || "—"}</b> · {r.category || "Uncategorized"}
+      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+        {results.map((r) => {
+          const img = imageProxy(r.image);
+          const price =
+            typeof r.price === "number" && !Number.isNaN(r.price)
+              ? `₹${Math.round(r.price)}`
+              : "N/A";
+          return (
+            <div
+              key={r.uniq_id}
+              style={{
+                display: "flex",
+                gap: 16,
+                alignItems: "flex-start",
+                background: "#0f172a",
+                color: "white",
+                borderRadius: 12,
+                border: "1px solid #334155",
+                padding: 12,
+                boxShadow: "0 1px 4px rgba(0,0,0,0.05)",
+              }}
+            >
+              {img ? (
+                <img
+                  src={img}
+                  alt={r.title}
+                  style={{
+                    width: 120,
+                    height: 120,
+                    borderRadius: 8,
+                    objectFit: "cover",
+                    background: "#1e293b",
+                  }}
+                  onError={(e) =>
+                    ((e.currentTarget as HTMLImageElement).style.display = "none")
+                  }
+                />
+              ) : (
+                <div
+                  style={{
+                    width: 120,
+                    height: 120,
+                    borderRadius: 8,
+                    background: "#1e293b",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#94a3b8",
+                  }}
+                >
+                  No Image
+                </div>
+              )}
+              <div style={{ flex: 1 }}>
+                <h3 style={{ margin: "0 0 4px 0", fontSize: 17 }}>{r.title}</h3>
+                <p style={{ margin: "0 0 4px 0", color: "#cbd5e1" }}>
+                  <b>{r.brand || "—"}</b> · {r.category || "Uncategorized"}
+                </p>
+                <p style={{ margin: 0 }}>
+                  Price: <b>{price}</b>
+                </p>
               </div>
-              <div style={{ color: "#facc15" }}>{r.price_text || "₹N/A"}</div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      {!loading && !err && results.length === 0 && (
-        <p style={{ color: "#94a3b8", textAlign: "center", marginTop: 24 }}>
-          Try: <i>“round glass side table under ₹9000”</i>
+      {!loading && results.length === 0 && !error && (
+        <p style={{ color: "#9ca3af", textAlign: "center", marginTop: 40 }}>
+          Try searching for “oak coffee table under ₹7000”
         </p>
       )}
     </div>
