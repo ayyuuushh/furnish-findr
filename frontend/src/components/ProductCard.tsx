@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React from "react";
 import { API_BASE } from "../lib/api";
 
 type Item = {
@@ -11,34 +11,23 @@ type Item = {
   price_text?: string | null;
 };
 
-// normalize any weird URLs
 function normalizeUrl(raw?: string | null): string | undefined {
   if (!raw) return;
   let s = String(raw).trim();
   if (!s) return;
   if (s.startsWith("//")) return "https:" + s;
   if (/^https?:\/\//i.test(s)) return s;
-  if (/^[a-z0-9.-]+\/.+/i.test(s)) return "https://" + s;
   const m = s.match(/https?:\/\/[^\s"']+/i);
-  return m ? m[0] : undefined;
+  if (m) return m[0];
+  return;
 }
 
 export default function ProductCard({ item }: { item: Item }) {
-  const direct = useMemo(() => normalizeUrl(item.image), [item.image]);
-  const [imgSrc, setImgSrc] = useState(
-    direct
-      ? `${API_BASE}/api/img?u=${encodeURIComponent(direct)}`
-      : "https://placehold.co/240x240?text=No+Image"
-  );
+  const direct = normalizeUrl(item.image);
 
-  const handleError = () => {
-    // fallback to direct if proxy fails
-    if (imgSrc.includes("/api/img") && direct) {
-      setImgSrc(direct);
-    } else {
-      setImgSrc("https://placehold.co/240x240?text=No+Image");
-    }
-  };
+  const imgSrc = direct
+    ? `${API_BASE}/api/img?u=${encodeURIComponent(direct)}`
+    : "https://placehold.co/240x240?text=No+Image";
 
   return (
     <div
@@ -55,7 +44,6 @@ export default function ProductCard({ item }: { item: Item }) {
       <img
         src={imgSrc}
         alt={item.title}
-        onError={handleError}
         loading="lazy"
         style={{
           width: 120,
@@ -68,7 +56,7 @@ export default function ProductCard({ item }: { item: Item }) {
       <div style={{ flex: 1 }}>
         <h3 style={{ margin: "0 0 6px 0", color: "#93c5fd" }}>{item.title}</h3>
         <p style={{ margin: 0, fontSize: 14 }}>
-          <b>{item.brand}</b> · {item.category}
+          <b>{item.brand || "—"}</b> · {item.category || "Uncategorized"}
         </p>
         <p style={{ color: "#facc15", margin: "6px 0 0 0" }}>
           {item.price_text || "₹N/A"}
