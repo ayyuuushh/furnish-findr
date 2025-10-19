@@ -1,20 +1,22 @@
 # backend/app/services/generative.py
 
 def _s(v):
-    """Safe string: handles None, floats/NaNs, and trims whitespace."""
+    """
+    Safe stringify: handles None, floats/NaNs, and trims whitespace.
+    Never raises on weird types.
+    """
     if v is None:
         return ""
     try:
-        # Some NaNs are float('nan') and stringify fine; that's okay—strip later.
         s = str(v)
     except Exception:
         return ""
     return s.strip()
 
-def blurb_for(md: dict) -> str:
+def blurb_for(md):
     """
-    Creates a short human-friendly line from metadata. All fields are coerced
-    to strings safely to avoid '.strip() on float' errors.
+    Creates a short human-friendly line from metadata.
+    All fields are coerced to strings safely.
     """
     title    = _s(md.get("title"))
     brand    = _s(md.get("brand"))
@@ -26,7 +28,7 @@ def blurb_for(md: dict) -> str:
     if title:
         parts.append(title)
     if brand:
-        parts.append(f"by {brand}")
+        parts.append("by " + brand)
 
     specs = []
     if material:
@@ -36,6 +38,6 @@ def blurb_for(md: dict) -> str:
     if category:
         specs.append(category)
     if specs:
-        parts.append(" · ".join(specs))
+        parts.append(" | ".join(specs))
 
     return " ".join(parts) if parts else "Recommended item"
