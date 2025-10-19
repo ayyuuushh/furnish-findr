@@ -1,6 +1,7 @@
 // frontend/src/lib/api.ts
 // Hard-code the deployed backend for reliability (avoids env drift).
-export const API_BASE = "https://furnish-findr-backend.onrender.com";
+export const API_BASE = import.meta.env.VITE_API_BASE || "https://furnish-findr-backend.onrender.com";
+
 
 // Helper with timeout
 function withTimeout<T>(promise: Promise<T>, ms = 30000): Promise<T> {
