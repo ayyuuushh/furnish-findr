@@ -24,7 +24,9 @@ function normalizeUrl(raw?: string | null): string | undefined {
 
 export default function ProductCard({ item }: { item: Item }) {
   const direct = normalizeUrl(item.image);
-  const proxied = direct ? `${API_BASE}/api/img?u=${encodeURIComponent(direct)}` : undefined;
+  const proxied = direct
+    ? `${API_BASE}/api/img?u=${encodeURIComponent(direct)}`
+    : undefined;
 
   const price =
     typeof item.price === "number" && !Number.isNaN(item.price)
@@ -34,27 +36,23 @@ export default function ProductCard({ item }: { item: Item }) {
   const handleError: React.ReactEventHandler<HTMLImageElement> = (e) => {
     const el = e.currentTarget;
     const current = el.getAttribute("src") || "";
-    // if proxy failed, try direct URL; otherwise show placeholder
     if (proxied && current.startsWith(`${API_BASE}/api/img`) && direct) {
-      el.src = direct;
+      el.src = direct; // fallback to direct if proxy fails
     } else {
       el.src = "https://placehold.co/320x240?text=No+Image";
     }
   };
 
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: 16,
-        alignItems: "flex-start",
-        background: "#0f172a",
-        borderRadius: 12,
-        border: "1px solid #1f2937",
-        padding: 12,
-        boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
-      }}
-    >
+    <div style={{
+      display: "flex",
+      gap: 16,
+      alignItems: "flex-start",
+      background: "#0f172a",
+      borderRadius: 12,
+      border: "1px solid #1f2937",
+      padding: 12
+    }}>
       {(proxied || direct) ? (
         <img
           src={proxied || direct}
@@ -62,34 +60,18 @@ export default function ProductCard({ item }: { item: Item }) {
           loading="lazy"
           referrerPolicy="no-referrer"
           style={{
-            width: 120,
-            height: 120,
-            borderRadius: 8,
-            objectFit: "cover",
-            background: "#0b1220",
-            border: "1px solid #334155",
-            flex: "0 0 120px",
+            width: 120, height: 120, borderRadius: 8,
+            objectFit: "cover", background: "#0b1220", flex: "0 0 120px"
           }}
           onError={handleError}
         />
       ) : (
-        <div
-          style={{
-            width: 120,
-            height: 120,
-            borderRadius: 8,
-            background: "#0b1220",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            color: "#94a3b8",
-            border: "1px solid #334155",
-            flex: "0 0 120px",
-            fontSize: 12,
-            textAlign: "center",
-            padding: 8,
-          }}
-        >
+        <div style={{
+          width: 120, height: 120, borderRadius: 8,
+          background: "#0b1220", display: "flex",
+          alignItems: "center", justifyContent: "center",
+          color: "#94a3b8", flex: "0 0 120px", fontSize: 12
+        }}>
           No Image
         </div>
       )}
